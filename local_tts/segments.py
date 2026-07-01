@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,7 @@ REFERENCE_FILENAMES = [
     Path("speaker.wav"),
     Path("speaker.mp3"),
 ]
+WHITESPACE_RE = re.compile(r"\s+")
 
 
 def load_json(path: Path) -> Any:
@@ -116,6 +118,10 @@ def validate_reference_audio(path: Path) -> Path:
     return path
 
 
+def normalize_text_for_tts(text: str) -> str:
+    return WHITESPACE_RE.sub(" ", text).strip()
+
+
 def load_segments(path: Path) -> list[dict[str, Any]]:
     payload = load_json(path)
     if not isinstance(payload, dict):
@@ -130,8 +136,12 @@ def load_segments(path: Path) -> list[dict[str, Any]]:
             raise ConfigError(f"Segment #{index} is not an object")
 
         text = segment.get("text")
-        if not isinstance(text, str) or not text.strip():
+        if not isinstance(text, str):
             raise ConfigError(f"Segment #{index} has no text")
+        normalized_text = normalize_text_for_tts(text)
+        if not normalized_text:
+            raise ConfigError(f"Segment #{index} has no text")
+        segment["text"] = normalized_text
 
         audio_filename = segment.get("audio_filename")
         if not isinstance(audio_filename, str) or not audio_filename.strip():

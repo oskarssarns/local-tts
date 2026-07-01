@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,6 +9,12 @@ from typing import Any
 
 from .constants import MULTILINGUAL_T3_MODEL
 from .errors import ConfigError
+
+
+def configure_model_cache(model_cache: Path) -> None:
+    model_cache.mkdir(parents=True, exist_ok=True)
+    os.environ["HF_HOME"] = str(model_cache)
+    os.environ["HF_HUB_CACHE"] = str(model_cache / "hub")
 
 
 def ensure_ffmpeg() -> str:

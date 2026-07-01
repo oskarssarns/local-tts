@@ -6,12 +6,16 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from local_tts.config import RunConfig
 from local_tts.errors import ConfigError
+from local_tts.generator import generate_segments
 from local_tts.segments import (
     detect_reference_audio,
     detect_segment_json,
     load_segments,
+    normalize_text_for_tts,
     planned_output_path,
 )
 
@@ -65,6 +69,28 @@ class LocalChatterboxSegmentTests(unittest.TestCase):
 
             with self.assertRaises(ConfigError):
                 load_segments(path)
+
+    def test_load_segments_normalizes_newlines_before_tts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "lecture_segments.json"
+            write_segments(
+                path,
+                [
+                    {
+                        "id": "intro",
+                        "text": "First line.\nSecond\tline.\r\n Third line.",
+                        "audio_filename": "intro.mp3",
+                    }
+                ],
+            )
+
+            segments = load_segments(path)
+
+            self.assertEqual(segments[0]["text"], "First line. Second line. Third line.")
+            self.assertEqual(
+                normalize_text_for_tts("  One\n\nTwo\tThree  "),
+                "One Two Three",
+            )
 
     def test_detect_reference_audio_uses_priority_order(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -163,6 +189,42 @@ class LocalChatterboxSegmentTests(unittest.TestCase):
             self.assertIn("Dry run:", result.stdout)
             self.assertIn("would generate intro", result.stdout)
             self.assertFalse((base_dir / "output").exists())
+
+    def test_download_model_mode_does_not_require_input_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = RunConfig(
+                segments=Path(tmp) / "missing_segments.json",
+                reference=Path(tmp) / "missing_reference.wav",
+                output_dir=Path(tmp) / "output",
+                model_cache=Path(tmp) / "models" / "huggingface",
+                download_model=True,
+                force=False,
+                dry_run=False,
+                device="cpu",
+                multilingual=False,
+                language_id="en",
+                exaggeration=0.35,
+                cfg_weight=0.3,
+                bitrate="192k",
+            )
+
+            with (
+                patch("local_tts.generator.detect_segment_json") as detect_segments,
+                patch("local_tts.generator.detect_reference_audio") as detect_reference,
+                patch("local_tts.generator.configure_model_cache") as configure_cache,
+                patch("local_tts.generator.select_device", return_value="cpu") as select_device,
+                patch("local_tts.generator.load_chatterbox_model") as load_model,
+                patch("local_tts.generator.cleanup_device_memory") as cleanup_memory,
+            ):
+                result = generate_segments(config)
+
+            self.assertEqual(result, 0)
+            detect_segments.assert_not_called()
+            detect_reference.assert_not_called()
+            configure_cache.assert_called_once()
+            select_device.assert_called_once_with("cpu")
+            load_model.assert_called_once_with(False, "cpu")
+            cleanup_memory.assert_called_once_with("cpu")
 
     def test_subprocess_reads_non_secret_env_file_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -5,6 +5,7 @@ from typing import Any
 
 from .audio import (
     cleanup_device_memory,
+    configure_model_cache,
     ensure_ffmpeg,
     generate_one_segment,
     load_chatterbox_model,
@@ -42,6 +43,25 @@ def print_plan(
 
 
 def generate_segments(config: RunConfig) -> int:
+    model_cache = resolve_repo_path(config.model_cache)
+    model_label = MODEL_NAME
+    if config.multilingual:
+        model_label = f"{MODEL_NAME} multilingual {MULTILINGUAL_T3_MODEL}"
+
+    if config.download_model:
+        if config.env_file:
+            print(f"Settings file: {display_path(config.env_file)}")
+        print(f"Model cache: {display_path(model_cache)}")
+        print(f"Model: {model_label}")
+        configure_model_cache(model_cache)
+        device = select_device(config.device)
+        print(f"Device: {device}")
+        print("Downloading/loading Chatterbox model...")
+        load_chatterbox_model(config.multilingual, device)
+        cleanup_device_memory(device)
+        print(f"Model ready in {display_path(model_cache)}")
+        return 0
+
     segments_path = resolve_repo_path(config.segments) if config.segments else detect_segment_json()
     reference_audio = (
         validate_reference_audio(resolve_repo_path(config.reference))
@@ -51,15 +71,13 @@ def generate_segments(config: RunConfig) -> int:
     output_dir = resolve_repo_path(config.output_dir)
 
     segments = load_segments(segments_path)
-    model_label = MODEL_NAME
-    if config.multilingual:
-        model_label = f"{MODEL_NAME} multilingual {MULTILINGUAL_T3_MODEL}"
 
     if config.env_file:
         print(f"Settings file: {display_path(config.env_file)}")
     print(f"Segments JSON: {display_path(segments_path)}")
     print(f"Reference audio: {display_path(reference_audio)}")
     print(f"Output directory: {display_path(output_dir)}")
+    print(f"Model cache: {display_path(model_cache)}")
     print(f"Segments: {len(segments)}")
     print(f"Model: {model_label}")
     print(f"Exaggeration: {config.exaggeration}")
@@ -72,6 +90,7 @@ def generate_segments(config: RunConfig) -> int:
 
     ffmpeg = ensure_ffmpeg()
     device = select_device(config.device)
+    configure_model_cache(model_cache)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Device: {device}")

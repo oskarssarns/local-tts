@@ -18,6 +18,8 @@ class RunConfig:
     segments: Path | None
     reference: Path | None
     output_dir: Path
+    model_cache: Path
+    download_model: bool
     force: bool
     dry_run: bool
     device: str
@@ -77,6 +79,7 @@ def env_defaults(env: dict[str, str]) -> dict[str, object]:
         "LOCAL_TTS_SEGMENTS": "segments",
         "LOCAL_TTS_REFERENCE": "reference",
         "LOCAL_TTS_OUTPUT_DIR": "output_dir",
+        "LOCAL_TTS_MODEL_CACHE": "model_cache",
     }
     bool_keys = {
         "LOCAL_TTS_FORCE": "force",
@@ -160,6 +163,17 @@ def parse_args(argv: Sequence[str] | None = None) -> RunConfig:
     )
     parser.add_argument("--output-dir", type=Path, default=defaults.get("output_dir", Path("output")))
     parser.add_argument(
+        "--model-cache",
+        type=Path,
+        default=defaults.get("model_cache", Path("models/huggingface")),
+        help="Directory for downloaded model files. Defaults to LOCAL_TTS_MODEL_CACHE or models/huggingface.",
+    )
+    parser.add_argument(
+        "--download-model",
+        action="store_true",
+        help="Download/load the Chatterbox model into the model cache, then exit.",
+    )
+    parser.add_argument(
         "--force",
         action=argparse.BooleanOptionalAction,
         default=defaults.get("force", False),
@@ -211,6 +225,8 @@ def parse_args(argv: Sequence[str] | None = None) -> RunConfig:
         segments=args.segments,
         reference=args.reference,
         output_dir=args.output_dir,
+        model_cache=args.model_cache,
+        download_model=args.download_model,
         force=args.force,
         dry_run=args.dry_run,
         device=args.device,
