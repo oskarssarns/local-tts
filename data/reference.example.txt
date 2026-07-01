@@ -1,0 +1,9 @@
+Place the real reference voice audio in this folder.
+
+Accepted default names:
+
+- reference.mp3
+- reference.wav
+
+Use a clean recording of the speaker you want to clone. Prefer one speaker,
+minimal background noise, no music, and audio you have permission to use.
