@@ -1,0 +1,14 @@
+{
+  "segments": [
+    {
+      "id": "seg_001",
+      "audio_filename": "sample_001.mp3",
+      "text": "Short example text for the first generated audio segment."
+    },
+    {
+      "id": "seg_002",
+      "audio_filename": "sample_002.mp3",
+      "text": "Another placeholder segment showing the expected JSON structure."
+    }
+  ]
+}
