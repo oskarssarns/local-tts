@@ -12,5 +12,7 @@
     "**/__pycache__/**": true,
     "**/models/**": true,
     "**/output/**": true
-  }
+  },
+  "git.terminalAuthentication": false,
+  "github.gitAuthentication": false
 }
