@@ -19,6 +19,9 @@ test/
 output/
 models/
 .cache/
+build/
+dist/
+dist-installer/
 *.wav.tmp
 *.tmp.wav
 *.part

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Callable
 
 from .audio import (
     cleanup_device_memory,
@@ -26,6 +27,49 @@ from .segments import (
 )
 
 
+@dataclass(frozen=True)
+class ProgressEvent:
+    stage: str
+    message: str
+    current: int | None = None
+    total: int | None = None
+    status: str = "info"
+
+
+ProgressCallback = Callable[[ProgressEvent], None]
+LogCallback = Callable[[str], None]
+
+
+def emit_progress(
+    callback: ProgressCallback | None,
+    *,
+    stage: str,
+    message: str,
+    current: int | None = None,
+    total: int | None = None,
+    status: str = "info",
+) -> None:
+    if callback is None:
+        return
+    callback(
+        ProgressEvent(
+            stage=stage,
+            message=message,
+            current=current,
+            total=total,
+            status=status,
+        )
+    )
+
+
+def stdout_log(message: str) -> None:
+    print(message)
+
+
+def stderr_log(message: str) -> None:
+    print(message, file=sys.stderr)
+
+
 def print_plan(
     *,
     segments: list[dict[str, Any]],
@@ -42,7 +86,15 @@ def print_plan(
         print(f"{action} {label} -> {display_path(output_path)}")
 
 
-def generate_segments(config: RunConfig) -> int:
+def generate_segments(
+    config: RunConfig,
+    *,
+    progress_callback: ProgressCallback | None = None,
+    logger: LogCallback | None = None,
+    error_logger: LogCallback | None = None,
+) -> int:
+    logger = logger or stdout_log
+    error_logger = error_logger or stderr_log
     model_cache = resolve_repo_path(config.model_cache)
     model_label = MODEL_NAME
     if config.multilingual:
@@ -50,16 +102,34 @@ def generate_segments(config: RunConfig) -> int:
 
     if config.download_model:
         if config.env_file:
-            print(f"Settings file: {display_path(config.env_file)}")
-        print(f"Model cache: {display_path(model_cache)}")
-        print(f"Model: {model_label}")
+            logger(f"Settings file: {display_path(config.env_file)}")
+        logger(f"Model cache: {display_path(model_cache)}")
+        logger(f"Model: {model_label}")
+        emit_progress(
+            progress_callback,
+            stage="model",
+            message="Preparing model cache...",
+            status="working",
+        )
         configure_model_cache(model_cache)
         device = select_device(config.device)
-        print(f"Device: {device}")
-        print("Downloading/loading Chatterbox model...")
+        logger(f"Device: {device}")
+        logger("Downloading/loading Chatterbox model...")
+        emit_progress(
+            progress_callback,
+            stage="model",
+            message="Downloading/loading model...",
+            status="working",
+        )
         load_chatterbox_model(config.multilingual, device)
         cleanup_device_memory(device)
-        print(f"Model ready in {display_path(model_cache)}")
+        logger(f"Model ready in {display_path(model_cache)}")
+        emit_progress(
+            progress_callback,
+            stage="model",
+            message=f"Model ready in {display_path(model_cache)}",
+            status="success",
+        )
         return 0
 
     segments_path = resolve_repo_path(config.segments) if config.segments else detect_segment_json()
@@ -71,30 +141,47 @@ def generate_segments(config: RunConfig) -> int:
     output_dir = resolve_repo_path(config.output_dir)
 
     segments = load_segments(segments_path)
+    total_segments = len(segments)
 
     if config.env_file:
-        print(f"Settings file: {display_path(config.env_file)}")
-    print(f"Segments JSON: {display_path(segments_path)}")
-    print(f"Reference audio: {display_path(reference_audio)}")
-    print(f"Output directory: {display_path(output_dir)}")
-    print(f"Model cache: {display_path(model_cache)}")
-    print(f"Segments: {len(segments)}")
-    print(f"Model: {model_label}")
-    print(f"Exaggeration: {config.exaggeration}")
-    print(f"CFG weight: {config.cfg_weight}")
+        logger(f"Settings file: {display_path(config.env_file)}")
+    logger(f"Segments JSON: {display_path(segments_path)}")
+    logger(f"Reference audio: {display_path(reference_audio)}")
+    logger(f"Output directory: {display_path(output_dir)}")
+    logger(f"Model cache: {display_path(model_cache)}")
+    logger(f"Segments: {total_segments}")
+    logger(f"Model: {model_label}")
+    logger(f"Exaggeration: {config.exaggeration}")
+    logger(f"CFG weight: {config.cfg_weight}")
 
     if config.dry_run:
-        print("Dry run: skipping ffmpeg check, dependency imports, model download, and inference.")
+        logger("Dry run: skipping ffmpeg check, dependency imports, model download, and inference.")
         print_plan(segments=segments, output_dir=output_dir, force=config.force)
         return 0
 
+    emit_progress(
+        progress_callback,
+        stage="generation",
+        message="Checking ffmpeg and selecting device...",
+        current=0,
+        total=total_segments,
+        status="working",
+    )
     ffmpeg = ensure_ffmpeg()
     device = select_device(config.device)
     configure_model_cache(model_cache)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Device: {device}")
-    print("Loading Chatterbox model...")
+    logger(f"Device: {device}")
+    logger("Loading Chatterbox model...")
+    emit_progress(
+        progress_callback,
+        stage="generation",
+        message="Loading model...",
+        current=0,
+        total=total_segments,
+        status="working",
+    )
     model = load_chatterbox_model(config.multilingual, device)
 
     manifest: list[dict[str, Any]] = []
@@ -107,7 +194,7 @@ def generate_segments(config: RunConfig) -> int:
         if output_path.exists() and output_path.stat().st_size > 0 and not config.force:
             bytes_count = output_path.stat().st_size
             duration_seconds = probe_duration_seconds(output_path)
-            print(f"skip {label} -> {display_path(output_path)}")
+            logger(f"skip {label} -> {display_path(output_path)}")
             manifest.append(
                 manifest_entry(
                     segment=segment,
@@ -121,9 +208,25 @@ def generate_segments(config: RunConfig) -> int:
                     device=device,
                 )
             )
+            emit_progress(
+                progress_callback,
+                stage="generation",
+                message=f"Skipped {label}",
+                current=index,
+                total=total_segments,
+                status="success",
+            )
             continue
 
-        print(f"generate {label} -> {display_path(output_path)}")
+        logger(f"generate {label} -> {display_path(output_path)}")
+        emit_progress(
+            progress_callback,
+            stage="generation",
+            message=f"Generating {label}...",
+            current=index - 1,
+            total=total_segments,
+            status="working",
+        )
         try:
             duration_seconds = generate_one_segment(
                 model=model,
@@ -151,9 +254,17 @@ def generate_segments(config: RunConfig) -> int:
                     device=device,
                 )
             )
+            emit_progress(
+                progress_callback,
+                stage="generation",
+                message=f"Generated {label}",
+                current=index,
+                total=total_segments,
+                status="success",
+            )
         except Exception as exc:  # Keep the manifest useful across long batches.
             failures += 1
-            print(f"failed {label}: {exc}", file=sys.stderr)
+            error_logger(f"failed {label}: {exc}")
             manifest.append(
                 manifest_entry(
                     segment=segment,
@@ -167,8 +278,24 @@ def generate_segments(config: RunConfig) -> int:
                     error_message=str(exc),
                 )
             )
+            emit_progress(
+                progress_callback,
+                stage="generation",
+                message=f"Failed {label}",
+                current=index,
+                total=total_segments,
+                status="error",
+            )
         finally:
             cleanup_device_memory(device)
 
     write_manifest(output_dir, manifest)
+    emit_progress(
+        progress_callback,
+        stage="generation",
+        message="Generation complete." if failures == 0 else "Generation finished with failures.",
+        current=total_segments,
+        total=total_segments,
+        status="success" if failures == 0 else "error",
+    )
     return 1 if failures else 0
