@@ -13,6 +13,7 @@ htmlcov/
 .venv/
 env/
 venv/
+test/
 
 # Local TTS outputs and temporary files
 output/
