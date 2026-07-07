@@ -21,6 +21,12 @@ Install Python dependencies:
 pip install -r requirements.txt
 ```
 
+If you want the desktop GUI on Linux, ensure `tkinter` is available:
+
+```bash
+sudo apt install python3-tk
+```
+
 Install `ffmpeg` for MP3 conversion:
 
 ```bash
@@ -149,6 +155,46 @@ python generate_local_chatterbox_segments.py
 Generated MP3 files are written to `output/`. The run manifest is written to
 `output/generation_manifest.json`.
 
+## Desktop App
+
+Launch the GUI:
+
+```bash
+python launch_local_tts_gui.py
+```
+
+The desktop app adds:
+
+- Light and dark themes.
+- A `Download / Load Model` button with activity status and a ready badge.
+- JSON import for `segments`.
+- Manual segment editing with `+ Segment` rows, per-row `Generate` buttons, queueing, cancel, per-segment progress, and inline playback for generated MP3s.
+- Voice sample selection for MP3 or WAV references.
+- A generation progress bar and live activity log.
+
+When you build the packaged Windows app, it stores data in:
+
+```text
+%LOCALAPPDATA%\LocalTTS
+```
+
+When you run the GUI from source, it uses the repository folders:
+
+```text
+data/
+models/
+output/
+```
+
+The GUI writes manual segment drafts to:
+
+```text
+data/segments.gui.json
+```
+
+If you leave `Segment ID` or `Output file` blank in manual rows, the app fills
+them automatically.
+
 ## Later Runs
 
 Activate the environment, edit `data/segments.json` or `.env` if needed, then
@@ -156,6 +202,7 @@ run:
 
 ```bash
 source .venv/bin/activate
+python launch_local_tts_gui.py
 python generate_local_chatterbox_segments.py --dry-run
 python generate_local_chatterbox_segments.py
 ```
@@ -169,11 +216,43 @@ Use a different settings file:
 python generate_local_chatterbox_segments.py --env-file my-settings.env
 ```
 
+## Windows Build And Installer
+
+The repo includes Windows packaging files for a native desktop build:
+
+```text
+packaging/windows/local_tts_gui.spec
+packaging/windows/build_windows.ps1
+packaging/windows/local_tts.iss
+```
+
+Typical build flow on Windows:
+
+```powershell
+python -m pip install pyinstaller
+.\packaging\windows\build_windows.ps1
+```
+
+What this does:
+
+- Builds a `dist\LocalTTS` desktop app with `PyInstaller`.
+- Copies `ffmpeg.exe`, `ffprobe.exe`, and `ffplay.exe` into the app folder when they are on
+  `PATH`.
+- Builds an installer with Inno Setup if `ISCC.exe` is installed.
+
+If Inno Setup is not installed yet, you can still build the app folder only:
+
+```powershell
+.\packaging\windows\build_windows.ps1 -SkipInstaller
+```
+
 ## Project Structure
 
 ```text
 generate_local_chatterbox_segments.py  CLI entrypoint
+launch_local_tts_gui.py                desktop GUI entrypoint
 local_tts/                             implementation modules
 data/                                  input templates and local input files
 output/                                generated MP3 files
+packaging/windows/                     native Windows packaging assets
 ```

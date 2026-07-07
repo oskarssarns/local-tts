@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from local_tts.config import RunConfig
 from local_tts.errors import ConfigError
-from local_tts.generator import generate_segments
+from local_tts.generator import ProgressEvent, generate_segments
 from local_tts.segments import (
     detect_reference_audio,
     detect_segment_json,
@@ -207,6 +207,7 @@ class LocalChatterboxSegmentTests(unittest.TestCase):
                 cfg_weight=0.3,
                 bitrate="192k",
             )
+            progress_events: list[ProgressEvent] = []
 
             with (
                 patch("local_tts.generator.detect_segment_json") as detect_segments,
@@ -216,7 +217,11 @@ class LocalChatterboxSegmentTests(unittest.TestCase):
                 patch("local_tts.generator.load_chatterbox_model") as load_model,
                 patch("local_tts.generator.cleanup_device_memory") as cleanup_memory,
             ):
-                result = generate_segments(config)
+                result = generate_segments(
+                    config,
+                    progress_callback=progress_events.append,
+                    logger=lambda _message: None,
+                )
 
             self.assertEqual(result, 0)
             detect_segments.assert_not_called()
@@ -225,6 +230,8 @@ class LocalChatterboxSegmentTests(unittest.TestCase):
             select_device.assert_called_once_with("cpu")
             load_model.assert_called_once_with(False, "cpu")
             cleanup_memory.assert_called_once_with("cpu")
+            self.assertEqual(progress_events[-1].status, "success")
+            self.assertEqual(progress_events[-1].stage, "model")
 
     def test_subprocess_reads_non_secret_env_file_settings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
