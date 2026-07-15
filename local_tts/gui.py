@@ -359,12 +359,72 @@ class LocalTTSApp(Tk):
         left_column.columnconfigure(0, weight=1)
         left_column.rowconfigure(1, weight=1)
 
-        right_column = ttk.Frame(self.shell, style="Shell.TFrame")
-        right_column.grid(row=1, column=1, sticky="nsew")
-        right_column.columnconfigure(0, weight=1)
-        right_column.rowconfigure(4, weight=1)
+        right_wrapper = ttk.Frame(self.shell, style="Shell.TFrame")
+        right_wrapper.grid(row=1, column=1, sticky="nsew")
 
+        right_wrapper.columnconfigure(0, weight=1)
+        right_wrapper.rowconfigure(0, weight=1)
+
+        self.right_canvas = tk.Canvas(
+            right_wrapper,
+            highlightthickness=0,
+            bd=0,
+        )
+
+        right_scrollbar = ttk.Scrollbar(
+            right_wrapper,
+            orient="vertical",
+            command=self.right_canvas.yview,
+        )
+
+        self.right_canvas.configure(
+            yscrollcommand=right_scrollbar.set
+        )
+
+        self.right_canvas.grid(row=0, column=0, sticky="nsew")
+        right_scrollbar.grid(row=0, column=1, sticky="ns")
+
+        right_column = ttk.Frame(self.right_canvas, style="Shell.TFrame")
+        right_column.columnconfigure(0, weight=1)
+
+        self.right_window = self.right_canvas.create_window(
+            (0, 0),
+            window=right_column,
+            anchor="nw",
+        )
+
+        right_column.bind(
+            "<Configure>",
+            lambda e: self.right_canvas.configure(
+                scrollregion=self.right_canvas.bbox("all")
+            ),
+        )
+
+        self.right_canvas.bind(
+            "<Configure>",
+            lambda e: self.right_canvas.itemconfigure(
+                self.right_window,
+                width=e.width,
+            ),
+        )
+
+        self.right_canvas.bind(
+            "<Enter>",
+            lambda e: self.right_canvas.bind_all(
+                "<MouseWheel>",
+                self._on_right_mousewheel,
+            ),
+        )
+
+        self.right_canvas.bind(
+            "<Leave>",
+            lambda e: self.right_canvas.unbind_all(
+                "<MouseWheel>",
+            ),
+        )
+        
         self._build_segments_card(left_column)
+
         self._build_model_card(right_column)
         self._build_reference_card(right_column)
         self._build_output_card(right_column)
@@ -767,6 +827,12 @@ class LocalTTSApp(Tk):
     def _on_mousewheel(self, event) -> None:
         if self.segment_canvas.winfo_exists():
             self.segment_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _on_right_mousewheel(self, event):
+        self.right_canvas.yview_scroll(
+            int(-1 * (event.delta / 120)),
+            "units",
+        )
 
     def choose_reference_audio(self) -> None:
         path = filedialog.askopenfilename(
