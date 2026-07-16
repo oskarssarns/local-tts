@@ -1,0 +1,113 @@
+name: windows-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without the leading v, for example 0.1.0"
+        required: true
+        default: "0.1.0"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-assets:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Resolve release version
+        id: release_version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}".TrimStart("v")
+          }
+          else {
+            $version = "${{ inputs.version }}"
+          }
+
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version '$version' is invalid. Use a three-part numeric version like 0.1.0."
+          }
+
+          "LOCAL_TTS_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Install Inno Setup and WiX Toolset
+        shell: pwsh
+        run: |
+          choco install innosetup wixtoolset --yes --no-progress
+
+      - name: Build Windows assets
+        shell: pwsh
+        run: |
+          .\packaging\windows\build_windows.ps1 -Version $env:LOCAL_TTS_VERSION
+
+      - name: Generate SHA256 checksums
+        shell: pwsh
+        run: |
+          $outputPath = "dist-installer\SHA256SUMS.txt"
+          $lines = foreach ($file in Get-ChildItem dist-installer -File | Sort-Object Name) {
+            $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash *$($file.Name)"
+          }
+          Set-Content -Path $outputPath -Value $lines
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-tts-windows-${{ steps.release_version.outputs.value }}
+          path: dist-installer/*
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $env:LOCAL_TTS_VERSION
+          $assets = @(
+            "dist-installer\LocalTTS-Setup-$version.exe",
+            "dist-installer\LocalTTS-$version.msi",
+            "dist-installer\LocalTTS-portable-$version.zip",
+            "dist-installer\SHA256SUMS.txt"
+          )
+          $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
+          $notes = @"
+          Windows release assets for $tag
+
+          Files:
+          - LocalTTS-Setup-$version.exe
+          - LocalTTS-$version.msi
+          - LocalTTS-portable-$version.zip
+          - SHA256SUMS.txt
+          "@
+          Set-Content -Path $notesPath -Value $notes
+
+          gh release view $tag 1>$null 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $assets --clobber
+          }
+          else {
+            gh release create $tag $assets --title $tag --notes-file $notesPath
+          }

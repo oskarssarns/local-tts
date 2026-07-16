@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?ifndef ProductVersion ?>
+<?define ProductVersion = "0.1.0" ?>
+<?endif ?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+    Id="*"
+    Name="Local TTS"
+    Language="1033"
+    Version="$(var.ProductVersion)"
+    Manufacturer="Local TTS"
+    UpgradeCode="8D63D626-8C57-48C2-B55D-AAC8E1E1E36F">
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perUser"
+      InstallPrivileges="limited"
+      Platform="x64" />
+    <MajorUpgrade
+      DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <UIRef Id="WixUI_Minimal" />
+
+    <Feature Id="MainFeature" Title="Local TTS" Level="1">
+      <ComponentGroupRef Id="LocalTTSFiles" />
+      <ComponentRef Id="StartMenuShortcutComponent" />
+    </Feature>
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="LocalProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLDIR" Name="Local TTS" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Local TTS" />
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcutComponent" Guid="9C9691DC-D910-4CF6-9097-95832CC0F42B">
+        <Shortcut
+          Id="ApplicationStartMenuShortcut"
+          Name="Local TTS"
+          Description="Launch Local TTS"
+          Target="[INSTALLDIR]LocalTTS.exe"
+          WorkingDirectory="INSTALLDIR" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\LocalTTS"
+          Name="InstallPath"
+          Type="string"
+          Value="[INSTALLDIR]"
+          KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

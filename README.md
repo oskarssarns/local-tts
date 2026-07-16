@@ -2,6 +2,43 @@
 
 Local text-to-speech generation with Resemble AI Chatterbox voice cloning.
 
+## Windows Downloads
+
+For non-technical Windows users, the intended distribution point is GitHub
+Releases. A tagged release can publish these assets:
+
+- `LocalTTS-Setup-x.y.z.exe`: normal desktop installer for most users.
+- `LocalTTS-x.y.z.msi`: MSI package for managed Windows environments.
+- `LocalTTS-portable-x.y.z.zip`: portable build without installation.
+- `SHA256SUMS.txt`: checksums for the release files.
+
+The release flow is wired in:
+
+```text
+.github/workflows/windows-release.yml
+```
+
+Basic release pipeline:
+
+1. Push a numeric tag such as `v0.1.0`.
+2. GitHub Actions builds the Windows desktop app on `windows-latest`.
+3. The workflow packages `.exe`, `.msi`, and portable `.zip` assets.
+4. The assets are uploaded to the matching GitHub Release.
+
+Manual Windows build for the same asset set:
+
+```powershell
+python -m pip install -r requirements.txt
+python -m pip install pyinstaller
+.\packaging\windows\build_windows.ps1 -Version 0.1.0
+```
+
+That command writes release-ready files into:
+
+```text
+dist-installer/
+```
+
 First-time setup installs Python dependencies and downloads the Chatterbox model
 into `models/huggingface`. Later runs reuse the downloaded model and generate
 MP3 files into `output/`.
@@ -218,19 +255,23 @@ python generate_local_chatterbox_segments.py --env-file my-settings.env
 
 ## Windows Build And Installer
 
-The repo includes Windows packaging files for a native desktop build:
+The repo includes Windows packaging files for a native desktop build and
+release assets:
 
 ```text
 packaging/windows/local_tts_gui.spec
 packaging/windows/build_windows.ps1
 packaging/windows/local_tts.iss
+packaging/windows/local_tts.wxs
+.github/workflows/windows-release.yml
 ```
 
 Typical build flow on Windows:
 
 ```powershell
+python -m pip install -r requirements.txt
 python -m pip install pyinstaller
-.\packaging\windows\build_windows.ps1
+.\packaging\windows\build_windows.ps1 -Version 0.1.0
 ```
 
 What this does:
@@ -238,13 +279,24 @@ What this does:
 - Builds a `dist\LocalTTS` desktop app with `PyInstaller`.
 - Copies `ffmpeg.exe`, `ffprobe.exe`, and `ffplay.exe` into the app folder when they are on
   `PATH`.
-- Builds an installer with Inno Setup if `ISCC.exe` is installed.
+- Creates `LocalTTS-portable-0.1.0.zip`.
+- Builds `LocalTTS-Setup-0.1.0.exe` with Inno Setup if `ISCC.exe` is installed.
+- Builds `LocalTTS-0.1.0.msi` with WiX Toolset 3 if `heat.exe`, `candle.exe`, and `light.exe`
+  are installed.
 
-If Inno Setup is not installed yet, you can still build the app folder only:
+If you only want selected outputs:
 
 ```powershell
-.\packaging\windows\build_windows.ps1 -SkipInstaller
+.\packaging\windows\build_windows.ps1 -Version 0.1.0 -SkipExeInstaller
+.\packaging\windows\build_windows.ps1 -Version 0.1.0 -SkipMsi
+.\packaging\windows\build_windows.ps1 -Version 0.1.0 -SkipPortableZip
 ```
+
+Recommended release behavior:
+
+- Use the `.exe` installer as the default download for normal users.
+- Publish the `.msi` in the same release for IT-managed Windows deployments.
+- Keep model download in-app on first run instead of bundling model weights into the installer.
 
 ## Project Structure
 

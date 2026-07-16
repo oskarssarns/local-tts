@@ -1,7 +1,18 @@
+#ifndef MyAppName
 #define MyAppName "Local TTS"
+#endif
+#ifndef MyAppVersion
 #define MyAppVersion "0.1.0"
+#endif
+#ifndef MyAppPublisher
 #define MyAppPublisher "Local TTS"
+#endif
+#ifndef MyAppExeName
 #define MyAppExeName "LocalTTS.exe"
+#endif
+#ifndef MyOutputBaseFilename
+#define MyOutputBaseFilename "LocalTTS-Setup"
+#endif
 
 [Setup]
 AppId={{F5C3CC17-4F86-46DF-BD72-3B24A239A9E7}
@@ -18,7 +29,7 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 OutputDir=..\..\dist-installer
-OutputBaseFilename=LocalTTS-Setup
+OutputBaseFilename={#MyOutputBaseFilename}
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
